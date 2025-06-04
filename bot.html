@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>오목 봇 선택 — Omok World</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f8fafc;
+      padding: 2rem;
+      text-align: center;
+    }
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 1rem;
+    }
+    .bot-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    button {
+      padding: 0.6rem 1.4rem;
+      font-weight: 600;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 0.55rem;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,.12);
+    }
+    iframe {
+      width: 100%;
+      max-width: 640px;
+      height: 650px;
+      border: none;
+      border-radius: 1rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>봇을 선택하세요</h1>
+  <div class="bot-buttons">
+    <button onclick="loadBot('bot1.html')">오목코치 (기본 학습)</button>
+    <button onclick="loadBot('bot2.html')">오모기 (공격형)</button>
+    <button onclick="loadBot('')">선택 초기화</button>
+  </div>
+
+  <iframe id="botFrame" src="" allowfullscreen></iframe>
+
+  <script>
+    function loadBot(page) {
+      document.getElementById('botFrame').src = page;
+    }
+  </script>
+</body>
+</html>
