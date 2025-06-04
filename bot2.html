@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>오모기 — 공격형 오목 AI</title>
+  <style>
+    :root { --board-size: 600px; --grid: 15; }
+    body { display:flex; flex-direction:column; align-items:center; font-family:system-ui,sans-serif; margin:0; padding:1rem; background:#f8fafc; }
+    canvas { background:#f3f4f6; box-shadow:0 4px 16px rgba(0,0,0,.1); border-radius:1rem; }
+    #controls{margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;}
+    button{padding:.55rem 1.1rem;border:none;border-radius:.55rem;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08);font-weight:600;background:#2563eb;color:#fff;transition:transform .15s ease,box-shadow .15s ease;}
+    button:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.12);}button.secondary{background:#64748b;}
+    #status{margin-top:.7rem;font-size:1.05rem;height:1.4rem;}
+    #stats{margin-top:.2rem;font-size:.95rem;color:#334155;display:flex;gap:.8rem;flex-wrap:wrap;justify-content:center;}
+  </style>
+</head>
+<body>
+  <h1>오모기 (흑 선공 AI)</h1>
+  <canvas id="board" width="600" height="600"></canvas>
+  <div id="controls">
+    <button id="reset">새 게임</button>
+    <button id="clearLearn" class="secondary">학습 초기화</button>
+    <button id="toggleHeat" class="secondary">Heat‑map 보기</button>
+  </div>
+  <p id="status"></p>
+  <div id="stats"></div>
+<script>
+'use strict';
+/******************* 설정 *************************/
+const BOARD_SIZE = 15;
+const CELL = 600 / BOARD_SIZE;
+const AI = 1, PLAYER = 2; // AI가 흑(1) 선공, 플레이어는 백(2)
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const statsEl = document.getElementById('stats');
+let board, currentPlayer, gameOver, showHeat=false;
+/******************* 학습 데이터 & 통계 *************************/
+let heat = loadHeatmap();
+let stats = loadStats(); // {player, ai, draw}
+/******************* 유틸 *************************/
+const range = n => [...Array(n).keys()];
+/******************* 보드 그리기 *************************/
+function drawBoard(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle='#9ca3af';range(BOARD_SIZE).forEach(i=>{ctx.beginPath();ctx.moveTo(CELL/2+i*CELL,CELL/2);ctx.lineTo(CELL/2+i*CELL,canvas.height-CELL/2);ctx.stroke();ctx.beginPath();ctx.moveTo(CELL/2,CELL/2+i*CELL);ctx.lineTo(canvas.width-CELL/2,CELL/2+i*CELL);ctx.stroke();});for(let y=0;y<BOARD_SIZE;y++)for(let x=0;x<BOARD_SIZE;x++){if(board[y][x])drawStone(x,y,board[y][x]===AI?'black':'white');}if(showHeat)drawHeatOverlay();}
+function drawStone(x,y,color){const cx=CELL/2+x*CELL,cy=CELL/2+y*CELL;ctx.beginPath();ctx.arc(cx,cy,CELL*0.38,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#374151';ctx.stroke();}
+function drawHeatOverlay(){const max=Math.max(...heat.flat().map(v=>Math.abs(v)))||1;for(let y=0;y<BOARD_SIZE;y++)for(let x=0;x<BOARD_SIZE;x++){if(board[y][x])continue;const val=heat[y][x];if(!val)continue;const alpha=Math.min(0.7,Math.abs(val)/max);ctx.fillStyle=val>0?`rgba(239,68,68,${alpha})`:`rgba(59,130,246,${alpha})`;ctx.fillRect(x*CELL+1,y*CELL+1,CELL-2,CELL-2);}}
+/******************* 게임 로직 *************************/
+function initGame(){board=Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(0));gameOver=false;currentPlayer=AI;drawBoard();statusEl.textContent='오모기 선수(흑) 첫 수';if(currentPlayer===AI)setTimeout(aiTurn,400);}
+function handleClick(e){if(gameOver||currentPlayer!==PLAYER)return;const rect=canvas.getBoundingClientRect();const x=Math.floor((e.clientX-rect.left)/CELL);const y=Math.floor((e.clientY-rect.top)/CELL);if(x<0||x>=BOARD_SIZE||y<0||y>=BOARD_SIZE||board[y][x])return;makeMove(x,y,PLAYER);if(!gameOver){currentPlayer=AI;statusEl.textContent='오모기 차례(흑)';setTimeout(aiTurn,300);}}
+function makeMove(x,y,p){board[y][x]=p;drawStone(x,y,p===AI?'black':'white');if(checkWin(x,y,p)){gameOver=true;statusEl.textContent=p===AI?'오모기 승리!':'플레이어 승리!';updateHeat(p===AI);updateStats(p===AI?'ai':'player');}else if(board.flat().every(c=>c)){gameOver=true;statusEl.textContent='무승부';updateHeat(false);updateStats('draw');}}
+function chainLen(x,y,dx,dy,p){let c=0,nx=x+dx,ny=y+dy;while(nx>=0&&nx<BOARD_SIZE&&ny>=0&&ny<BOARD_SIZE&&board[ny][nx]===p){c++;nx+=dx;ny+=dy;}return c;}
+function checkWin(x,y,p){return[[1,0],[0,1],[1,1],[1,-1]].some(([dx,dy])=>1+chainLen(x,y,dx,dy,p)+chainLen(x,y,-dx,-dy,p)>=5);} 
+/******************* AI *************************/
+function aiTurn(){let best=null,bestScore=-Infinity;for(let y=0;y<BOARD_SIZE;y++)for(let x=0;x<BOARD_SIZE;x++)if(!board[y][x]){const score=evaluateCell(x,y);if(score>bestScore){bestScore=score;best={x,y};}}if(!best){statusEl.textContent='오모기 패스?';gameOver=true;return;}makeMove(best.x,best.y,AI);if(!gameOver){currentPlayer=PLAYER;statusEl.textContent='플레이어 차례(백)';}}
+function evaluateCell(x,y){let s=heat[y][x];s+=patternScore(x,y,AI)*6; // 공격 가중치 ↑
+ s+=patternScore(x,y,PLAYER)*4; // 방어 가중치 ↓
+ return s;}
+function patternScore(x,y,p){let best=0;for(const[dx,dy]of[[1,0],[0,1],[1,1],[1,-1]]){const l=chainLen(x,y,dx,dy,p),r=chainLen(x,y,-dx,-dy,p),open=(isEmpty(x+(l+1)*dx,y+(l+1)*dy)?1:0)+(isEmpty(x-(r+1)*dx,y-(r+1)*dy)?1:0),len=l+r;if(len>=4)return 10000;if(len===3&&open===2)best=Math.max(best,800);else if(len===3)best=Math.max(best,400);else if(len===2&&open===2)best=Math.max(best,100);else if(len===2)best=Math.max(best,40);else if(len===1&&open===2)best=Math.max(best,12);}return best;}
+function isEmpty(x,y){return x>=0&&x<BOARD_SIZE&&y>=0&&y<BOARD_SIZE&&!board[y][x];}
+/******************* 학습 *************************/
+function updateHeat(aiWon){const d=aiWon?1:-1;for(let y=0;y<BOARD_SIZE;y++)for(let x=0;x<BOARD_SIZE;x++)if(board[y][x]===AI)heat[y][x]+=d;saveHeatmap();}
+function saveHeatmap(){localStorage.setItem('omogiHeat',JSON.stringify(heat));}
+function loadHeatmap(){const d=localStorage.getItem('omogiHeat');return d?JSON.parse(d):Array.from({length:BOARD_SIZE},()=>Array(BOARD_SIZE).fill(0));}
+function updateStats(res){stats[res]++;saveStats();updateStatsDisplay();}
+function saveStats(){localStorage.setItem('omogiStats',JSON.stringify(stats));}
+function loadStats(){const d=localStorage.getItem('omogiStats');return d?JSON.parse(d):{player:0,ai:0,draw:0};}
+function updateStatsDisplay(){statsEl.innerHTML=`플레이어 승:${stats.player} • 오모기 승:${stats.ai} • 무:${stats.draw}`;}
+/******************* 이벤트 바인딩 *************************/
+canvas.addEventListener('click',handleClick);
+document.getElementById('reset').addEventListener('click',initGame);
+document.getElementById('clearLearn').addEventListener('click',()=>{localStorage.removeItem('omogiHeat');localStorage.removeItem('omogiStats');heat=loadHeatmap();stats=loadStats();updateStatsDisplay();initGame();});
+document.getElementById('toggleHeat').addEventListener('click',()=>{showHeat=!showHeat;drawBoard();});
+/******************* 시작 *************************/
+updateStatsDisplay();
+initGame();
+</script>
+</body>
+</html>
